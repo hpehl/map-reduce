@@ -44,8 +44,10 @@ public class Server {
 
     private final ModelControllerClient client;
 
-    public Server(final String host, final int port) {
+    public Server() {
         try {
+            String host = System.getProperty("management.host", "localhost");
+            int port = Integer.parseInt(System.getProperty("management.port", "9990"));
             client = ModelControllerClient.Factory.create(InetAddress.getByName(host), port);
         } catch (UnknownHostException e) {
             throw new RuntimeException(e);

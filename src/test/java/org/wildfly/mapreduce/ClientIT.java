@@ -38,7 +38,7 @@ public class ClientIT {
 
     @Before
     public void setUp() {
-        server = new Server("localhost", 9990);
+        server = new Server();
     }
 
     @After
