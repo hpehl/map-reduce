@@ -22,9 +22,15 @@
 package org.wildfly.mapreduce;
 
 import static org.jboss.as.controller.client.helpers.ClientConstants.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.wildfly.mapreduce.MapReduceConstants.*;
 
+import java.util.List;
+
 import org.jboss.dmr.ModelNode;
+import org.jboss.dmr.Property;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -38,7 +44,7 @@ public class ClientIT {
 
     @Before
     public void setUp() {
-        server = new Server("localhost", 9990);
+        server = new Server();
     }
 
     @After
@@ -50,49 +56,60 @@ public class ClientIT {
     // ------------------------------------------------------ normal tests
 
     @Test
-    public void masterServerConfigurations() {
+    public void allServerConfigs() {
+        ModelNode op = mapReduceOp("host", "*", "server-config", "*");
+
+        ModelNode response = server.execute(op);
+        List<ModelNode> nodes = response.asList();
+        assertEquals(3, nodes.size());
+    }
+
+    @Test
+    public void masterServerConfigs() {
         ModelNode op = mapReduceOp("host", "master", "server-config", "*");
 
         ModelNode response = server.execute(op);
-        System.out.println(response);
+        List<ModelNode> nodes = response.asList();
+        assertEquals(3, nodes.size());
     }
 
     @Test
-    public void allServerConfigurations() {
-        ModelNode op = mapReduceOp("host", "*", "server-config", "*");
-
-        ModelNode response = server.execute(op);
-        System.out.println(response);
-    }
-
-    @Test
-    public void runningServersInMainGroup() {
+    public void serverConfigsInMainGroup() {
         ModelNode op = mapReduceOp("host", "*", "server-config", "*");
 
         ModelNode filter = new ModelNode();
-        filter.get(NAME).set("server-group");
+        filter.get(NAME).set("group");
         filter.get(VALUE).set("main-server-group");
         op.get(FILTER).set(filter);
 
         ModelNode response = server.execute(op);
-        System.out.println(response);
+        List<ModelNode> nodes = response.asList();
+        assertEquals(2, nodes.size());
     }
 
     @Test
-    public void reducedRunningServersInMainGroup() {
+    public void reducedAutoStartServerConfigs() {
         ModelNode op = mapReduceOp("host", "*", "server-config", "*");
 
         ModelNode filter = new ModelNode();
-        filter.get(NAME).set("server-group");
-        filter.get(VALUE).set("main-server-group");
+        filter.get(NAME).set("auto-start");
+        filter.get(VALUE).set(false);
         op.get(FILTER).set(filter);
 
         ModelNode attributes = new ModelNode();
-        attributes.add("host").add("name").add("profile-name").add("server-state");
+        attributes.add("name").add("group");
         op.get(ATTRIBUTES).set(attributes);
 
         ModelNode response = server.execute(op);
-        System.out.println(response);
+        List<ModelNode> nodes = response.asList();
+        assertEquals(1, nodes.size());
+
+        ModelNode result = nodes.get(0).get(RESULT);
+        List<Property> properties = result.asPropertyList();
+        assertEquals(2, properties.size());
+        assertTrue(result.get("name").isDefined());
+        assertTrue(result.get("group").isDefined());
+        assertFalse(result.get("auto-start").isDefined());
     }
 
 
@@ -100,7 +117,10 @@ public class ClientIT {
 
     @Test
     public void singletonResources() {
-        mapReduceOp("profile", "default", "subsystem", "*");
+        ModelNode op = mapReduceOp("profile", "default", "subsystem", "*");
+
+        ModelNode response = server.execute(op);
+        assertFalse(response.asList().isEmpty()); // there should be some profiles
     }
 
     @Test
@@ -108,7 +128,8 @@ public class ClientIT {
         ModelNode op = mapReduceOp("host", "master");
 
         ModelNode response = server.execute(op);
-        System.out.println(response);
+        assertEquals(1, response.asList().size());
+        assertEquals(new ModelNode().add("host", "master"), response.asList().get(0).get(ADDRESS));
     }
 
     @Test
@@ -118,7 +139,11 @@ public class ClientIT {
         op.get(ADDRESS).setEmptyList();
 
         ModelNode response = server.execute(op);
-        System.out.println(response);
+        assertEquals(1, response.asList().size());
+
+        ModelNode firstResult = response.asList().get(0);
+        assertTrue(firstResult.get(ADDRESS).asList().isEmpty());
+        assertEquals("DOMAIN", firstResult.get(RESULT).get("launch-type").asString());
     }
 
 
