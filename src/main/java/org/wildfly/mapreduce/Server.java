@@ -56,6 +56,8 @@ public class Server {
 
     public ModelNode execute(ModelNode mapReduceOp) {
         validate(mapReduceOp);
+        ModelNode filter = mapReduceOp.get(FILTER);
+        ModelNode attributes = mapReduceOp.get(ATTRIBUTES);
 
         try {
             // resolve addresses
@@ -69,16 +71,34 @@ public class Server {
             // execute operations
             List<Response> responses = new ArrayList<>();
             for (ReadResourceOperation readResourceOperation : readResourceOperations) {
+
+                // execute
                 ModelNode node = client.execute(readResourceOperation.operation);
-                responses.add(new Response(readResourceOperation.address, node.get(OUTCOME), node.get(RESULT)));
+                if (!ModelNodeUtils.wasSuccessful(node)) {
+                    throw new IOException(ModelNodeUtils.getFailure(node));
+                }
+
+                // filter
+                ModelNode result = node.get(RESULT);
+                if (filter.isDefined() && !match(result, filter)) {
+                    continue;
+                }
+
+                // reduce
+                if (attributes.isDefined()) {
+                    result = reduce(result, attributes);
+                }
+
+                // collect
+                responses.add(new Response(readResourceOperation.address, node.get(OUTCOME), result));
             }
 
-            // add all responses to one model node
-            ModelNode combined = new ModelNode();
+            // put everything into one "composite" node
+            ModelNode composite = new ModelNode().setEmptyList();
             for (Response response : responses) {
-                combined.add(response.asModelNode());
+                composite.add(response.asModelNode());
             }
-            return combined;
+            return composite;
 
         } catch (IOException e) {
             ModelNode error = new ModelNode();
@@ -101,7 +121,8 @@ public class Server {
         }
         for (Property path : address.asPropertyList()) {
             if (WILDCARD.equals(path.getName())) {
-                throw new IllegalArgumentException("Illegal usage of wildcards in " + address + ": " + path.toString());
+                throw new IllegalArgumentException("Illegal usage of wildcards in " + ModelNodeUtils
+                        .formatAddress(address) + " for segment " + path.toString());
             }
         }
 
@@ -114,7 +135,7 @@ public class Server {
             throw new UnsupportedOperationException("Unsupported operation " + op);
         }
 
-        // for now only simple filters with an implicit == are supported
+        // for now only one filter attribute is supported
         ModelNode filter = operation.get(FILTER);
         if (filter.isDefined()) {
             if (filter.getType() != ModelType.OBJECT) {
@@ -141,6 +162,22 @@ public class Server {
                 throw new IllegalArgumentException("Attributes must not be empty");
             }
         }
+    }
+
+    private boolean match(final ModelNode result, final ModelNode filter) {
+        // atm only equals() is supported
+        String name = filter.get(NAME).asString();
+        ModelNode value = result.get(name);
+        return value.isDefined() && value.equals(filter.get(VALUE));
+    }
+
+    private ModelNode reduce(final ModelNode result, final ModelNode attributes) {
+        ModelNode reduced = new ModelNode();
+        for (ModelNode attribute : attributes.asList()) {
+            String name = attribute.asString();
+            reduced.get(name).set(result.get(name));
+        }
+        return reduced;
     }
 
     public void shutdown() {

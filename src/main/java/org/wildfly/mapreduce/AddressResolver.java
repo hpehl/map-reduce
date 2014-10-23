@@ -88,14 +88,13 @@ class AddressResolver {
         op.get(INCLUDE_RUNTIME).set(true);
 
         ModelNode response = client.execute(op);
-        if (!SUCCESS.equals(response.get(OUTCOME).asString())) {
-            ModelNode failureNode = response.get(FAILURE_DESCRIPTION);
-            String failure = failureNode.isDefined() ? failureNode.asString() : "Unknown error";
-            throw new IOException(failure);
+        if (!ModelNodeUtils.wasSuccessful(response)) {
+            throw new IOException(ModelNodeUtils.getFailure(response));
         }
         ModelNode result = response.get(RESULT);
         if (!result.isDefined()) {
-            throw new IOException("No result");
+            throw new IOException("No result found for " + ModelNodeUtils.formatAddress(
+                    address) + ":" + READ_CHILDREN_NAMES_OPERATION + "(" + CHILD_TYPE + "=" + childType + ")");
         }
         return result.asList();
     }
