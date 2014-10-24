@@ -59,9 +59,6 @@ public class MapReduceHandler {
     public static final String DEFAULT_HOST = "localhost";
     public static final int DEFAULT_PORT = 9990;
 
-    private static final String WILDFLY_404 = "WFLYCTL0216";
-    private static final String EAP_404 = "JBAS014807";
-
     private final ModelControllerClient client;
 
     public MapReduceHandler() {
