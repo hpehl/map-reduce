@@ -33,6 +33,10 @@ import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.dmr.ModelNode;
 
 /**
+ * Resolves the wildcards in an address template to a list of full qualified resource addresses. Wildcards are resolved
+ * using a {@code read-children-names} operation: The address template {@code /host=master/server-config=*} is resolved
+ * using the operation: {@code /host=master:read-children-names(child-type=server-config)}.
+ *
  * @author Harald Pehl
  */
 class AddressResolver {
@@ -85,7 +89,6 @@ class AddressResolver {
         op.get(ADDRESS).set(address);
         op.get(OP).set(READ_CHILDREN_NAMES_OPERATION);
         op.get(CHILD_TYPE).set(childType);
-        op.get(INCLUDE_RUNTIME).set(true);
 
         ModelNode response = client.execute(op);
         if (!ModelNodeUtils.wasSuccessful(response)) {

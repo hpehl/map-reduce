@@ -19,6 +19,9 @@
 
 package org.wildfly.mapreduce;
 
+/**
+ * Missing constants not in {@code org.jboss.as.controller.client.helpers.ClientConstants}.
+ */
 public interface MapReduceConstants {
 
     String ADDRESS = "address";

@@ -28,8 +28,10 @@ import static org.wildfly.mapreduce.MapReduceConstants.ADDRESS;
 import org.jboss.dmr.ModelNode;
 
 /**
-* @author Harald Pehl
-*/
+ * Simple struct for the result of an {@link org.wildfly.mapreduce.ReadResourceOperation}
+ *
+ * @author Harald Pehl
+ */
 final class Response {
 
     final ModelNode address;

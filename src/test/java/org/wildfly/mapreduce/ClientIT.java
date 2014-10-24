@@ -22,9 +22,7 @@
 package org.wildfly.mapreduce;
 
 import static org.jboss.as.controller.client.helpers.ClientConstants.*;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import static org.wildfly.mapreduce.MapReduceConstants.*;
 
 import java.util.List;
@@ -36,30 +34,30 @@ import org.junit.Before;
 import org.junit.Test;
 
 /**
- * Requires domain mode with default setup!
+ * Integration test for typical use cases and some edge cases. Requires domain mode with default setup!
  */
 public class ClientIT {
 
-    private Server server;
+    private MapReduceHandler mapReduceHandler;
 
     @Before
     public void setUp() {
-        server = new Server();
+        mapReduceHandler = new MapReduceHandler();
     }
 
     @After
     public void tearDown() {
-        server.shutdown();
+        mapReduceHandler.shutdown();
     }
 
 
-    // ------------------------------------------------------ normal tests
+    // ------------------------------------------------------ typical use cases
 
     @Test
     public void allServerConfigs() {
         ModelNode op = mapReduceOp("host", "*", "server-config", "*");
 
-        ModelNode response = server.execute(op);
+        ModelNode response = mapReduceHandler.execute(op);
         List<ModelNode> nodes = response.asList();
         assertEquals(3, nodes.size());
     }
@@ -68,7 +66,7 @@ public class ClientIT {
     public void masterServerConfigs() {
         ModelNode op = mapReduceOp("host", "master", "server-config", "*");
 
-        ModelNode response = server.execute(op);
+        ModelNode response = mapReduceHandler.execute(op);
         List<ModelNode> nodes = response.asList();
         assertEquals(3, nodes.size());
     }
@@ -82,7 +80,7 @@ public class ClientIT {
         filter.get(VALUE).set("main-server-group");
         op.get(FILTER).set(filter);
 
-        ModelNode response = server.execute(op);
+        ModelNode response = mapReduceHandler.execute(op);
         List<ModelNode> nodes = response.asList();
         assertEquals(2, nodes.size());
     }
@@ -100,7 +98,7 @@ public class ClientIT {
         attributes.add("name").add("group");
         op.get(ATTRIBUTES).set(attributes);
 
-        ModelNode response = server.execute(op);
+        ModelNode response = mapReduceHandler.execute(op);
         List<ModelNode> nodes = response.asList();
         assertEquals(1, nodes.size());
 
@@ -112,6 +110,15 @@ public class ClientIT {
         assertFalse(result.get("auto-start").isDefined());
     }
 
+    @Test
+    public void profilesWithJacorb() {
+        ModelNode op = mapReduceOp("profile", "*", "subsystem", "jacorb");
+
+        ModelNode response = mapReduceHandler.execute(op);
+        List<ModelNode> nodes = response.asList();
+        assertEquals(2, nodes.size()); // profiles full, full-ha
+    }
+
 
     // ------------------------------------------------------ edge cases
 
@@ -119,15 +126,16 @@ public class ClientIT {
     public void singletonResources() {
         ModelNode op = mapReduceOp("profile", "default", "subsystem", "*");
 
-        ModelNode response = server.execute(op);
-        assertFalse(response.asList().isEmpty()); // there should be some profiles
+        ModelNode response = mapReduceHandler.execute(op);
+        assertFalse(response.asList().isEmpty()); // there should be some subsystems!
     }
 
     @Test
     public void noWildcard() {
         ModelNode op = mapReduceOp("host", "master");
 
-        ModelNode response = server.execute(op);
+        // expect a wrapped single read-resource response
+        ModelNode response = mapReduceHandler.execute(op);
         assertEquals(1, response.asList().size());
         assertEquals(new ModelNode().add("host", "master"), response.asList().get(0).get(ADDRESS));
     }
@@ -138,7 +146,8 @@ public class ClientIT {
         op.get(OP).set(MAP_REDUCE);
         op.get(ADDRESS).setEmptyList();
 
-        ModelNode response = server.execute(op);
+        // expect the wrapped root resource
+        ModelNode response = mapReduceHandler.execute(op);
         assertEquals(1, response.asList().size());
 
         ModelNode firstResult = response.asList().get(0);

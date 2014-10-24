@@ -36,24 +36,54 @@ import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
 
 /**
- * Fake server which resolves map / reduce operations against a real server.
+ * A handler which resolves map / reduce operations against a DMR endpoint. A map / reduce operation consists of three
+ * properties:
+ * <ol>
+ * <li>An address template</li>
+ * <li>An optional filter</li>
+ * <li>An optional list of reducing attributes</li>
+ * </ol>
+ * The address template is a resource address with one or several wildcards like {@code host=master/server-config=*}.
+ * The template is resolved to a list of real addresses and for each resolved address an {@code
+ * read-resource(include-runtime=true)} is executed. If a filter was specified, the results are matched against the
+ * filter value using {@code equals()}. Finally the results are reduced according the list of attributes.
+ * <p/>
+ * The DMR endpoint can be specified using the system properties {@code management.host} and {@code management.port},
+ * which are "localhost" and 9990 by default.
  *
  * @author Harald Pehl
  */
-public class Server {
+public class MapReduceHandler {
+
+    public static final String DEFAULT_HOST = "localhost";
+    public static final int DEFAULT_PORT = 9990;
+
+    private static final String WILDFLY_404 = "WFLYCTL0216";
+    private static final String EAP_404 = "JBAS014807";
 
     private final ModelControllerClient client;
 
-    public Server() {
+    public MapReduceHandler() {
         try {
-            String host = System.getProperty("management.host", "localhost");
-            int port = Integer.parseInt(System.getProperty("management.port", "9990"));
+            String host = System.getProperty("management.host", DEFAULT_HOST);
+            int port = Integer.parseInt(System.getProperty("management.port", String.valueOf(DEFAULT_PORT)));
             client = ModelControllerClient.Factory.create(InetAddress.getByName(host), port);
         } catch (UnknownHostException e) {
             throw new RuntimeException(e);
         }
     }
 
+    /**
+     * Execute the specified map / reduce operation. The method follow the 'fail-fast' principle. That is the first
+     * error will result in an error model node to be returned.
+     *
+     * @param mapReduceOp a model node describing a valid map / reduce operation.
+     *
+     * @return A list model node which contains all resolved
+     *
+     * @throws java.lang.IllegalArgumentException      for an invalid map / reduce operation
+     * @throws java.lang.UnsupportedOperationException for an invalid map / reduce operation
+     */
     public ModelNode execute(ModelNode mapReduceOp) {
         validate(mapReduceOp);
         ModelNode filter = mapReduceOp.get(FILTER);
@@ -75,7 +105,13 @@ public class Server {
                 // execute
                 ModelNode node = client.execute(readResourceOperation.operation);
                 if (!ModelNodeUtils.wasSuccessful(node)) {
-                    throw new IOException(ModelNodeUtils.getFailure(node));
+                    String failure = ModelNodeUtils.getFailure(node);
+                    if (failure.startsWith(WILDFLY_404) || failure.startsWith(EAP_404)) {
+                        // TODO Is there a more reliable way to check for resource not found?
+                        // Skip this kind of error
+                        continue;
+                    }
+                    throw new IOException(failure);
                 }
 
                 // filter
