@@ -22,55 +22,54 @@
 package org.wildfly.mapreduce;
 
 import static org.jboss.as.controller.client.helpers.ClientConstants.*;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import static org.wildfly.mapreduce.MapReduceConstants.*;
 
 import java.util.List;
 
 import org.jboss.dmr.ModelNode;
+import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 /**
- * Requires domain mode with default setup!
+ * Integration test for typical use cases and some edge cases. Requires domain mode with default setup!
  */
 public class ClientIT {
 
-    private Server server;
+    private MapReduceHandler mapReduceHandler;
 
     @Before
     public void setUp() {
-        server = new Server();
+        mapReduceHandler = new MapReduceHandler();
     }
 
     @After
     public void tearDown() {
-        server.shutdown();
+        mapReduceHandler.shutdown();
     }
 
 
-    // ------------------------------------------------------ normal tests
+    // ------------------------------------------------------ some typical use cases
 
     @Test
     public void allServerConfigs() {
         ModelNode op = mapReduceOp("host", "*", "server-config", "*");
 
-        ModelNode response = server.execute(op);
-        List<ModelNode> nodes = response.asList();
-        assertEquals(3, nodes.size());
+        ModelNode response = mapReduceHandler.execute(op);
+        assertSuccessful(response);
+        assertEquals(3, payload(response).size());
     }
 
     @Test
     public void masterServerConfigs() {
         ModelNode op = mapReduceOp("host", "master", "server-config", "*");
 
-        ModelNode response = server.execute(op);
-        List<ModelNode> nodes = response.asList();
-        assertEquals(3, nodes.size());
+        ModelNode response = mapReduceHandler.execute(op);
+        assertSuccessful(response);
+        assertEquals(3, payload(response).size());
     }
 
     @Test
@@ -82,9 +81,9 @@ public class ClientIT {
         filter.get(VALUE).set("main-server-group");
         op.get(FILTER).set(filter);
 
-        ModelNode response = server.execute(op);
-        List<ModelNode> nodes = response.asList();
-        assertEquals(2, nodes.size());
+        ModelNode response = mapReduceHandler.execute(op);
+        assertSuccessful(response);
+        assertEquals(2, payload(response).size());
     }
 
     @Test
@@ -100,11 +99,13 @@ public class ClientIT {
         attributes.add("name").add("group");
         op.get(ATTRIBUTES).set(attributes);
 
-        ModelNode response = server.execute(op);
-        List<ModelNode> nodes = response.asList();
-        assertEquals(1, nodes.size());
+        ModelNode response = mapReduceHandler.execute(op);
+        assertSuccessful(response);
 
-        ModelNode result = nodes.get(0).get(RESULT);
+        List<ModelNode> payload = payload(response);
+        assertEquals(1, payload.size());
+
+        ModelNode result = payload.get(0).get(RESULT);
         List<Property> properties = result.asPropertyList();
         assertEquals(2, properties.size());
         assertTrue(result.get("name").isDefined());
@@ -112,24 +113,59 @@ public class ClientIT {
         assertFalse(result.get("auto-start").isDefined());
     }
 
+    @Test
+    public void stateOfRunningServersInMainGroup() {
+        ModelNode op = mapReduceOp("host", "*", "server", "*");
 
-    // ------------------------------------------------------ edge cases
+        ModelNode filter = new ModelNode();
+        filter.get(NAME).set("server-group");
+        filter.get(VALUE).set("main-server-group");
+        op.get(FILTER).set(filter);
+
+        ModelNode attributes = new ModelNode();
+        attributes.add("server-state");
+        op.get(ATTRIBUTES).set(attributes);
+
+        ModelNode response = mapReduceHandler.execute(op);
+        assertSuccessful(response);
+    }
 
     @Test
-    public void singletonResources() {
-        ModelNode op = mapReduceOp("profile", "default", "subsystem", "*");
+    public void profilesWithJacorb() {
+        ModelNode op = mapReduceOp("profile", "*", "subsystem", "jacorb");
 
-        ModelNode response = server.execute(op);
-        assertFalse(response.asList().isEmpty()); // there should be some profiles
+        ModelNode response = mapReduceHandler.execute(op);
+        assertSuccessful(response);
+        List<ModelNode> payload = payload(response);
+        assertEquals(4, payload.size());
+
+        int successful = 0;
+        int failed= 0;
+        for (ModelNode modelNode : payload) {
+            if (ModelNodeUtils.wasSuccessful(modelNode)) {
+                successful++;
+            } else {
+                failed++;
+            }
+        }
+        assertEquals(2, successful); // full, full-ha
+        assertEquals(2, failed); // default, ha
     }
+
+
+    // ------------------------------------------------------ error / edge cases
 
     @Test
     public void noWildcard() {
         ModelNode op = mapReduceOp("host", "master");
 
-        ModelNode response = server.execute(op);
-        assertEquals(1, response.asList().size());
-        assertEquals(new ModelNode().add("host", "master"), response.asList().get(0).get(ADDRESS));
+        // expect a wrapped single read-resource response
+        ModelNode response = mapReduceHandler.execute(op);
+        assertSuccessful(response);
+
+        List<ModelNode> payload = payload(response);
+        assertEquals(1, payload.size());
+        assertEquals(new ModelNode().add("host", "master"), payload.get(0).get(ADDRESS));
     }
 
     @Test
@@ -138,12 +174,31 @@ public class ClientIT {
         op.get(OP).set(MAP_REDUCE);
         op.get(ADDRESS).setEmptyList();
 
-        ModelNode response = server.execute(op);
-        assertEquals(1, response.asList().size());
+        // expect the wrapped root resource
+        ModelNode response = mapReduceHandler.execute(op);
+        assertSuccessful(response);
 
-        ModelNode firstResult = response.asList().get(0);
-        assertTrue(firstResult.get(ADDRESS).asList().isEmpty());
-        assertEquals("DOMAIN", firstResult.get(RESULT).get("launch-type").asString());
+        List<ModelNode> payload = payload(response);
+        assertEquals(1, payload.size());
+
+        ModelNode rootResource = payload.get(0);
+        assertTrue(rootResource.get(ADDRESS).asList().isEmpty());
+        assertEquals("DOMAIN", rootResource.get(RESULT).get("launch-type").asString());
+    }
+
+    @Test
+    public void invalidAddress() {
+
+    }
+
+    @Test
+    public void invalidFilter() {
+
+    }
+
+    @Test
+    public void invalidReducingAttributes() {
+
     }
 
 
@@ -157,4 +212,13 @@ public class ClientIT {
         }
         return op;
     }
+
+    private void assertSuccessful(final ModelNode response) {
+        assertNotNull(response);
+        assertEquals(SUCCESS, response.get(OUTCOME).asString());
+        assertTrue(response.get(RESULT).isDefined());
+        assertEquals(ModelType.LIST, response.get(RESULT).getType());
+    }
+
+    private List<ModelNode> payload(final ModelNode response) {return response.get(RESULT).asList();}
 }

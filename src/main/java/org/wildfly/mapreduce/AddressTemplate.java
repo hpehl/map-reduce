@@ -30,8 +30,10 @@ import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
 
 /**
-* @author Harald Pehl
-*/
+ * A data holder for a resource address with one or multiple wildcards.
+ *
+ * @author Harald Pehl
+ */
 final class AddressTemplate {
 
     final ModelNode underlying;
@@ -82,6 +84,15 @@ final class AddressTemplate {
         }
     }
 
+    /**
+     * Resolves the wildcard in this address template against the specified values and returns a new address template.
+     * Depending on the number of wildcards in this template and the number of values provided, the returned address
+     * template might be or might not be fully resolved.
+     *
+     * @param value the concrete values which are replaces with the wildcards in this template
+     *
+     * @return a new address template
+     */
     AddressTemplate resolve(final String... value) {
         if (value == null || value.length == 0 || isResolved()) {
             return this;

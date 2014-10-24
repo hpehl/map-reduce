@@ -33,6 +33,10 @@ import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.dmr.ModelNode;
 
 /**
+ * Resolves the wildcards in an address template to a list of full qualified resource addresses. Wildcards are resolved
+ * using a {@code read-children-names} operation: The address template {@code /host=master/server-config=*} is resolved
+ * using the operation: {@code /host=master:read-children-names(child-type=server-config)}.
+ *
  * @author Harald Pehl
  */
 class AddressResolver {
@@ -41,20 +45,20 @@ class AddressResolver {
 
     AddressResolver(final ModelControllerClient client) {this.client = client;}
 
-    List<ModelNode> resolve(AddressTemplate start) throws IOException {
+    List<Response> resolve(AddressTemplate start) {
         if (start.isResolved()) {
             // are you kidding?
-            return asList(start.underlying);
+            return asList(Response.prepare(start.underlying));
+
         } else {
             List<AddressTemplate> unresolved = asList(start);
-            List<ModelNode> resolved = new ArrayList<>();
-            resolveInternal(unresolved, resolved);
-            return resolved;
+            List<Response> processed = new ArrayList<>();
+            resolveInternal(unresolved, processed);
+            return processed;
         }
     }
 
-    private void resolveInternal(final List<AddressTemplate> unresolved, final List<ModelNode> resolved)
-            throws IOException {
+    private void resolveInternal(final List<AddressTemplate> unresolved, final List<Response> processed) {
         if (unresolved.isEmpty()) {
             // hooray we're finished!
             return;
@@ -62,22 +66,28 @@ class AddressResolver {
 
         ArrayList<AddressTemplate> stillUnresolved = new ArrayList<>();
         for (AddressTemplate nextUnresolved : unresolved) {
+
             // read children
             ModelNode resolvedPart = nextUnresolved.resolvedPart();
             String wildcardType = nextUnresolved.firstWildcardType();
-            List<ModelNode> children = readChildrenNames(resolvedPart, wildcardType);
+            try {
+                List<ModelNode> children = readChildrenNames(resolvedPart, wildcardType);
+                for (ModelNode child : children) {
 
-            // prepare recursion
-            for (ModelNode child : children) {
-                AddressTemplate template = nextUnresolved.resolve(child.asString());
-                if (template.isResolved()) {
-                    resolved.add(template.underlying);
-                } else {
-                    stillUnresolved.add(template);
+                    // populate lists for next call
+                    AddressTemplate template = nextUnresolved.resolve(child.asString());
+                    if (template.isResolved()) {
+                        processed.add(Response.prepare(template.underlying));
+                    } else {
+                        stillUnresolved.add(template);
+                    }
                 }
+            } catch (IOException e) {
+                Response failure = Response.failed(resolvedPart.add(wildcardType, "*"), e.getMessage());
+                processed.add(failure);
             }
         }
-        resolveInternal(stillUnresolved, resolved);
+        resolveInternal(stillUnresolved, processed);
     }
 
     private List<ModelNode> readChildrenNames(ModelNode address, String childType) throws IOException {
@@ -85,17 +95,18 @@ class AddressResolver {
         op.get(ADDRESS).set(address);
         op.get(OP).set(READ_CHILDREN_NAMES_OPERATION);
         op.get(CHILD_TYPE).set(childType);
-        op.get(INCLUDE_RUNTIME).set(true);
 
         ModelNode response = client.execute(op);
         if (!ModelNodeUtils.wasSuccessful(response)) {
             throw new IOException(ModelNodeUtils.getFailure(response));
         }
+
         ModelNode result = response.get(RESULT);
         if (!result.isDefined()) {
             throw new IOException("No result found for " + ModelNodeUtils.formatAddress(
                     address) + ":" + READ_CHILDREN_NAMES_OPERATION + "(" + CHILD_TYPE + "=" + childType + ")");
         }
+
         return result.asList();
     }
 }

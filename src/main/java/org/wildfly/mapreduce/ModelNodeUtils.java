@@ -35,10 +35,7 @@ final class ModelNodeUtils {
     private ModelNodeUtils() {}
 
     static boolean wasSuccessful(ModelNode response) {
-        if (response != null) {
-            return SUCCESS.equals(response.get(OUTCOME).asString());
-        }
-        return false;
+        return response != null && SUCCESS.equals(response.get(OUTCOME).asString());
     }
 
     static String getFailure(ModelNode response) {

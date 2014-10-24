@@ -21,32 +21,66 @@
  */
 package org.wildfly.mapreduce;
 
-import static org.jboss.as.controller.client.helpers.ClientConstants.OUTCOME;
-import static org.jboss.as.controller.client.helpers.ClientConstants.RESULT;
+import static org.jboss.as.controller.client.helpers.ClientConstants.*;
 import static org.wildfly.mapreduce.MapReduceConstants.ADDRESS;
+import static org.wildfly.mapreduce.MapReduceConstants.FAILED;
 
 import org.jboss.dmr.ModelNode;
 
 /**
-* @author Harald Pehl
-*/
+ * Result of one operation in the context of a map / reduce operation
+ *
+ * @author Harald Pehl
+ */
 final class Response {
 
+    private ModelNode outcome;
+    private ModelNode failure;
     final ModelNode address;
-    final ModelNode outcome;
-    final ModelNode result;
+    ModelNode result;
 
-    Response(final ModelNode address, final ModelNode outcome, final ModelNode result) {
+    static Response prepare(final ModelNode address) {
+        Response response = new Response(address);
+        response.outcome = new ModelNode(); // undefined
+        response.result = new ModelNode(); // undefined
+        response.failure = new ModelNode(); // undefined
+        return response;
+    }
+
+    static Response failed(final ModelNode address, final String failure) {
+        Response response = new Response(address);
+        response.makeFailed(failure);
+        return response;
+    }
+
+    private Response(final ModelNode address) {
         this.address = address;
-        this.outcome = outcome;
+    }
+
+    boolean isFailed() {
+        return failure.isDefined();
+    }
+
+    void useResult(final ModelNode result) {
+        this.outcome = new ModelNode().set(SUCCESS);
         this.result = result;
+    }
+
+    void makeFailed(String failure) {
+        this.outcome = new ModelNode().set(FAILED);
+        this.result = new ModelNode(); // undefined
+        this.failure = new ModelNode().set(failure);
     }
 
     ModelNode asModelNode() {
         ModelNode node = new ModelNode();
         node.get(ADDRESS).set(address);
         node.get(OUTCOME).set(outcome);
-        node.get(RESULT).set(result);
+        if (isFailed()) {
+            node.get(FAILURE_DESCRIPTION).set(failure);
+        } else {
+            node.get(RESULT).set(result);
+        }
         return node;
     }
 }

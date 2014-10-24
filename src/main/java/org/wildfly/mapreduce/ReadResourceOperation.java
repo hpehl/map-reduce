@@ -27,6 +27,8 @@ import static org.wildfly.mapreduce.MapReduceConstants.ADDRESS;
 import org.jboss.dmr.ModelNode;
 
 /**
+ * Holds the fully qualified, resolved address an the related {@code read-resource} operation.
+ *
  * @author Harald Pehl
  */
 final class ReadResourceOperation {
