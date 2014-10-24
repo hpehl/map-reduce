@@ -39,14 +39,14 @@ import org.jboss.dmr.Property;
  * A handler which resolves map / reduce operations against a DMR endpoint. A map / reduce operation consists of three
  * properties:
  * <ol>
- * <li>An address template</li>
- * <li>An optional filter</li>
- * <li>An optional list of reducing attributes</li>
+ * <li>address template</li>
+ * <li>optional filter</li>
+ * <li>optional list of reducing attributes</li>
  * </ol>
  * The address template is a resource address with one or several wildcards like {@code host=master/server-config=*}.
- * The template is resolved to a list of real addresses and for each resolved address an {@code
- * read-resource(include-runtime=true)} is executed. If a filter was specified, the results are matched against the
- * filter value using {@code equals()}. Finally the results are reduced according the list of attributes.
+ * The template is resolved to a list of real addresses and for each resolved address a {@code
+ * read-resource(include-runtime=true)} operation is executed. If a filter was specified, the results are matched
+ * against the filter value using {@code equals()}. Finally the results are reduced according the list of attributes.
  * <p/>
  * The DMR endpoint can be specified using the system properties {@code management.host} and {@code management.port},
  * which are "localhost" and 9990 by default.
