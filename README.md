@@ -22,7 +22,7 @@ The address template is a resource address with one or several wildcards like `h
 
 ## Examples
 
-To get the state of all running servers across all hosts which are part of server group "foo", we'd use the following code:
+To get the state of all running servers across all hosts which are part of server group "main-server-group", use the following code:
 
 ```java
 ModelNode address = new ModelNode();
