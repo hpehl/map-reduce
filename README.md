@@ -12,15 +12,15 @@ This proposal suggests a new operation which collects all relevant information *
 
 The address template is a resource address with one or several wildcards like `host=master/server-config=*`. The address template is resolved to a list of full qualified addresses and for each resolved address a `read-resource(include-runtime=true)`} operation is executed. If a filter is specified, the results are matched against the filter value. Finally the results are reduced according the list of reducing attributes.
 
-# Result Format
+## Result Format
 
 [Pending]
 
-# Error Handling
+## Error Handling
 
 [Pending]
 
-# Examples
+## Examples
 
 To get the state of all running servers across all hosts which are part of server group "foo", we'd use the following code:
 
@@ -46,7 +46,7 @@ ModelNode response = modelControllerClient.execute(op);
 
 More examples can be found in this integration test: [ClientIT](src/test/java/org/wildfly/mapreduce/ClientIT.java)
 
-# Prototype
+## Prototype
 
 This repository implements as a prototype for the proposed map / reduce operation. The [ClientIT](src/test/java/org/wildfly/mapreduce/ClientIT.java) tests some basic use cases and acts as a playground for the new operation. You can execute the integration test using maven::
 
