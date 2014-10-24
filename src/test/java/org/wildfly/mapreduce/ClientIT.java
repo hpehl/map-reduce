@@ -28,6 +28,7 @@ import static org.wildfly.mapreduce.MapReduceConstants.*;
 import java.util.List;
 
 import org.jboss.dmr.ModelNode;
+import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
 import org.junit.After;
 import org.junit.Before;
@@ -51,15 +52,15 @@ public class ClientIT {
     }
 
 
-    // ------------------------------------------------------ typical use cases
+    // ------------------------------------------------------ some typical use cases
 
     @Test
     public void allServerConfigs() {
         ModelNode op = mapReduceOp("host", "*", "server-config", "*");
 
         ModelNode response = mapReduceHandler.execute(op);
-        List<ModelNode> nodes = response.asList();
-        assertEquals(3, nodes.size());
+        assertSuccessful(response);
+        assertEquals(3, payload(response).size());
     }
 
     @Test
@@ -67,8 +68,8 @@ public class ClientIT {
         ModelNode op = mapReduceOp("host", "master", "server-config", "*");
 
         ModelNode response = mapReduceHandler.execute(op);
-        List<ModelNode> nodes = response.asList();
-        assertEquals(3, nodes.size());
+        assertSuccessful(response);
+        assertEquals(3, payload(response).size());
     }
 
     @Test
@@ -81,8 +82,8 @@ public class ClientIT {
         op.get(FILTER).set(filter);
 
         ModelNode response = mapReduceHandler.execute(op);
-        List<ModelNode> nodes = response.asList();
-        assertEquals(2, nodes.size());
+        assertSuccessful(response);
+        assertEquals(2, payload(response).size());
     }
 
     @Test
@@ -99,10 +100,12 @@ public class ClientIT {
         op.get(ATTRIBUTES).set(attributes);
 
         ModelNode response = mapReduceHandler.execute(op);
-        List<ModelNode> nodes = response.asList();
-        assertEquals(1, nodes.size());
+        assertSuccessful(response);
 
-        ModelNode result = nodes.get(0).get(RESULT);
+        List<ModelNode> payload = payload(response);
+        assertEquals(1, payload.size());
+
+        ModelNode result = payload.get(0).get(RESULT);
         List<Property> properties = result.asPropertyList();
         assertEquals(2, properties.size());
         assertTrue(result.get("name").isDefined());
@@ -111,24 +114,46 @@ public class ClientIT {
     }
 
     @Test
+    public void stateOfRunningServersInMainGroup() {
+        ModelNode op = mapReduceOp("host", "*", "server", "*");
+
+        ModelNode filter = new ModelNode();
+        filter.get(NAME).set("server-group");
+        filter.get(VALUE).set("main-server-group");
+        op.get(FILTER).set(filter);
+
+        ModelNode attributes = new ModelNode();
+        attributes.add("server-state");
+        op.get(ATTRIBUTES).set(attributes);
+
+        ModelNode response = mapReduceHandler.execute(op);
+        assertSuccessful(response);
+    }
+
+    @Test
     public void profilesWithJacorb() {
         ModelNode op = mapReduceOp("profile", "*", "subsystem", "jacorb");
 
         ModelNode response = mapReduceHandler.execute(op);
-        List<ModelNode> nodes = response.asList();
-        assertEquals(2, nodes.size()); // profiles full, full-ha
+        assertSuccessful(response);
+        List<ModelNode> payload = payload(response);
+        assertEquals(4, payload.size());
+
+        int successful = 0;
+        int failed= 0;
+        for (ModelNode modelNode : payload) {
+            if (ModelNodeUtils.wasSuccessful(modelNode)) {
+                successful++;
+            } else {
+                failed++;
+            }
+        }
+        assertEquals(2, successful); // full, full-ha
+        assertEquals(2, failed); // default, ha
     }
 
 
-    // ------------------------------------------------------ edge cases
-
-    @Test
-    public void singletonResources() {
-        ModelNode op = mapReduceOp("profile", "default", "subsystem", "*");
-
-        ModelNode response = mapReduceHandler.execute(op);
-        assertFalse(response.asList().isEmpty()); // there should be some subsystems!
-    }
+    // ------------------------------------------------------ error / edge cases
 
     @Test
     public void noWildcard() {
@@ -136,8 +161,11 @@ public class ClientIT {
 
         // expect a wrapped single read-resource response
         ModelNode response = mapReduceHandler.execute(op);
-        assertEquals(1, response.asList().size());
-        assertEquals(new ModelNode().add("host", "master"), response.asList().get(0).get(ADDRESS));
+        assertSuccessful(response);
+
+        List<ModelNode> payload = payload(response);
+        assertEquals(1, payload.size());
+        assertEquals(new ModelNode().add("host", "master"), payload.get(0).get(ADDRESS));
     }
 
     @Test
@@ -148,11 +176,29 @@ public class ClientIT {
 
         // expect the wrapped root resource
         ModelNode response = mapReduceHandler.execute(op);
-        assertEquals(1, response.asList().size());
+        assertSuccessful(response);
 
-        ModelNode firstResult = response.asList().get(0);
-        assertTrue(firstResult.get(ADDRESS).asList().isEmpty());
-        assertEquals("DOMAIN", firstResult.get(RESULT).get("launch-type").asString());
+        List<ModelNode> payload = payload(response);
+        assertEquals(1, payload.size());
+
+        ModelNode rootResource = payload.get(0);
+        assertTrue(rootResource.get(ADDRESS).asList().isEmpty());
+        assertEquals("DOMAIN", rootResource.get(RESULT).get("launch-type").asString());
+    }
+
+    @Test
+    public void invalidAddress() {
+
+    }
+
+    @Test
+    public void invalidFilter() {
+
+    }
+
+    @Test
+    public void invalidReducingAttributes() {
+
     }
 
 
@@ -166,4 +212,13 @@ public class ClientIT {
         }
         return op;
     }
+
+    private void assertSuccessful(final ModelNode response) {
+        assertNotNull(response);
+        assertEquals(SUCCESS, response.get(OUTCOME).asString());
+        assertTrue(response.get(RESULT).isDefined());
+        assertEquals(ModelType.LIST, response.get(RESULT).getType());
+    }
+
+    private List<ModelNode> payload(final ModelNode response) {return response.get(RESULT).asList();}
 }

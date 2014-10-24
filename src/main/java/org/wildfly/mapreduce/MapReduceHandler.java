@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import org.jboss.as.controller.client.ModelControllerClient;
@@ -85,64 +86,71 @@ public class MapReduceHandler {
      * @throws java.lang.UnsupportedOperationException for an invalid map / reduce operation
      */
     public ModelNode execute(ModelNode mapReduceOp) {
-        validate(mapReduceOp);
-        ModelNode filter = mapReduceOp.get(FILTER);
-        ModelNode attributes = mapReduceOp.get(ATTRIBUTES);
-
+        ModelNode mapReduceResult;
         try {
+            validate(mapReduceOp);
+            ModelNode filter = mapReduceOp.get(FILTER);
+            ModelNode attributes = mapReduceOp.get(ATTRIBUTES);
+
             // resolve addresses
-            List<ReadResourceOperation> readResourceOperations = new ArrayList<>();
             AddressTemplate addressTemplate = new AddressTemplate(mapReduceOp.get(ADDRESS));
-            List<ModelNode> resolved = new AddressResolver(client).resolve(addressTemplate);
-            for (ModelNode address : resolved) {
-                readResourceOperations.add(new ReadResourceOperation(address));
-            }
+            List<Response> responses = new AddressResolver(client).resolve(addressTemplate);
 
-            // execute operations
-            List<Response> responses = new ArrayList<>();
-            for (ReadResourceOperation readResourceOperation : readResourceOperations) {
+            for (Iterator<Response> iterator = responses.iterator(); iterator.hasNext(); ) {
+                Response response = iterator.next();
+                if (!response.isFailed()) {
+                    ReadResourceOperation readResourceOperation = new ReadResourceOperation(response.address);
+                    try {
+                        ModelNode node = client.execute(readResourceOperation.operation);
 
-                // execute
-                ModelNode node = client.execute(readResourceOperation.operation);
-                if (!ModelNodeUtils.wasSuccessful(node)) {
-                    String failure = ModelNodeUtils.getFailure(node);
-                    if (failure.startsWith(WILDFLY_404) || failure.startsWith(EAP_404)) {
-                        // TODO Is there a more reliable way to check for resource not found?
-                        // Skip this kind of error
-                        continue;
+                        if (!ModelNodeUtils.wasSuccessful(node)) {
+                            response.makeFailed(ModelNodeUtils.getFailure(node));
+
+                        } else {
+                            // filter
+                            ModelNode result = node.get(RESULT);
+                            if (filter.isDefined() && !match(response, result, filter)) {
+                                if (!response.isFailed()) {
+                                    // remove filtered responses
+                                    iterator.remove();
+                                }
+                                continue;
+                            }
+
+                            // reduce
+                            if (attributes.isDefined()) {
+                                result = reduce(response, result, attributes);
+                                if (result == null) {
+                                    // some reducing attributes were not defined for that resource
+                                    continue;
+                                }
+                            }
+
+                            // collect
+                            response.useResult(result);
+                        }
+                    } catch (IOException e) {
+                        response.makeFailed(e.getMessage());
                     }
-                    throw new IOException(failure);
                 }
-
-                // filter
-                ModelNode result = node.get(RESULT);
-                if (filter.isDefined() && !match(result, filter)) {
-                    continue;
-                }
-
-                // reduce
-                if (attributes.isDefined()) {
-                    result = reduce(result, attributes);
-                }
-
-                // collect
-                responses.add(new Response(readResourceOperation.address, node.get(OUTCOME), result));
             }
 
-            // put everything into one "composite" node
+            // build result
             ModelNode composite = new ModelNode().setEmptyList();
             for (Response response : responses) {
                 composite.add(response.asModelNode());
             }
-            return composite;
+            mapReduceResult = new ModelNode();
+            mapReduceResult.get(OUTCOME).set(allFailed(responses) ? FAILED : SUCCESS);
+            mapReduceResult.get(RESULT).set(composite);
 
-        } catch (IOException e) {
-            ModelNode error = new ModelNode();
-            error.get(OUTCOME).set(FAILED);
-            error.get(FAILURE_DESCRIPTION).set(e.getMessage());
-            error.get(ROLLED_BACK).set(true);
-            return error;
+        } catch (RuntimeException e) {
+            // validation error
+            mapReduceResult = new ModelNode();
+            mapReduceResult.get(OUTCOME).set("failed");
+            mapReduceResult.get(FAILURE_DESCRIPTION).set(e.getMessage());
         }
+        return mapReduceResult;
     }
 
     private void validate(final ModelNode operation) {
@@ -200,20 +208,57 @@ public class MapReduceHandler {
         }
     }
 
-    private boolean match(final ModelNode result, final ModelNode filter) {
-        // atm only equals() is supported
+    private boolean match(final Response response, final ModelNode result, final ModelNode filter) {
         String name = filter.get(NAME).asString();
         ModelNode value = result.get(name);
-        return value.isDefined() && value.equals(filter.get(VALUE));
+
+        if (value.isDefined()) {
+            // atm only equals() is supported
+            return value.equals(filter.get(VALUE));
+
+        } else {
+            response.makeFailed("Filter attribute \"" + name + "\" not defined for this resource");
+            return false;
+        }
     }
 
-    private ModelNode reduce(final ModelNode result, final ModelNode attributes) {
-        ModelNode reduced = new ModelNode();
+    private ModelNode reduce(final Response response, final ModelNode result, final ModelNode attributes) {
+        // make sure all attributes are defined
+        List<String> names = new ArrayList<>();
+        List<String> undefined = new ArrayList<>();
         for (ModelNode attribute : attributes.asList()) {
             String name = attribute.asString();
-            reduced.get(name).set(result.get(name));
+            ModelNode value = result.get(name);
+            if (value.isDefined()) {
+                names.add(name);
+            } else {
+                undefined.add("\"" + name + "\"");
+            }
         }
-        return reduced;
+
+        if (!undefined.isEmpty()) {
+            response.makeFailed("Reducing attributes " + undefined + " not defined for this resource");
+            // ugly hack; wish Java had multiple return values
+            return null;
+
+        } else {
+            ModelNode reduced = new ModelNode();
+            for (String name : names) {
+                ModelNode value = result.get(name);
+                reduced.get(name).set(value);
+            }
+            return reduced;
+        }
+    }
+
+    private boolean allFailed(final List<Response> responses) {
+        int count = 0;
+        for (Response response : responses) {
+            if (response.isFailed()) {
+                count++;
+            }
+        }
+        return !responses.isEmpty() && count == responses.size();
     }
 
     public void shutdown() {

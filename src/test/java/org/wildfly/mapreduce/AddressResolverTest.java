@@ -2,7 +2,7 @@ package org.wildfly.mapreduce;
 
 import static org.jboss.as.controller.client.helpers.ClientConstants.*;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertSame;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.mock;
@@ -35,11 +35,11 @@ public class AddressResolverTest {
     public void resolveSimple() throws IOException {
         when(client.execute(any(ModelNode.class))).thenReturn(listResponse("server0", "server1", "server2"));
 
-        List<ModelNode> resolved = resolver.resolve(templateFor("host", "master", "server-config", "*"));
+        List<Response> resolved = resolver.resolve(templateFor("host", "master", "server-config", "*"));
         assertEquals(3, resolved.size());
-        assertEquals(new ModelNode().add("host", "master").add("server-config", "server0"), resolved.get(0));
-        assertEquals(new ModelNode().add("host", "master").add("server-config", "server1"), resolved.get(1));
-        assertEquals(new ModelNode().add("host", "master").add("server-config", "server2"), resolved.get(2));
+        assertEquals(new ModelNode().add("host", "master").add("server-config", "server0"), resolved.get(0).address);
+        assertEquals(new ModelNode().add("host", "master").add("server-config", "server1"), resolved.get(1).address);
+        assertEquals(new ModelNode().add("host", "master").add("server-config", "server2"), resolved.get(2).address);
     }
 
     @Test
@@ -48,14 +48,14 @@ public class AddressResolverTest {
         when(client.execute(argThat(new ChildTypeMatcher("server-config"))))
                 .thenReturn(listResponse("server0", "server1", "server2"));
 
-        List<ModelNode> resolved = resolver.resolve(templateFor("host", "*", "server-config", "*"));
+        List<Response> resolved = resolver.resolve(templateFor("host", "*", "server-config", "*"));
         assertEquals(6, resolved.size());
-        assertEquals(new ModelNode().add("host", "master").add("server-config", "server0"), resolved.get(0));
-        assertEquals(new ModelNode().add("host", "master").add("server-config", "server1"), resolved.get(1));
-        assertEquals(new ModelNode().add("host", "master").add("server-config", "server2"), resolved.get(2));
-        assertEquals(new ModelNode().add("host", "slave").add("server-config", "server0"), resolved.get(3));
-        assertEquals(new ModelNode().add("host", "slave").add("server-config", "server1"), resolved.get(4));
-        assertEquals(new ModelNode().add("host", "slave").add("server-config", "server2"), resolved.get(5));
+        assertEquals(new ModelNode().add("host", "master").add("server-config", "server0"), resolved.get(0).address);
+        assertEquals(new ModelNode().add("host", "master").add("server-config", "server1"), resolved.get(1).address);
+        assertEquals(new ModelNode().add("host", "master").add("server-config", "server2"), resolved.get(2).address);
+        assertEquals(new ModelNode().add("host", "slave").add("server-config", "server0"), resolved.get(3).address);
+        assertEquals(new ModelNode().add("host", "slave").add("server-config", "server1"), resolved.get(4).address);
+        assertEquals(new ModelNode().add("host", "slave").add("server-config", "server2"), resolved.get(5).address);
     }
 
 
@@ -67,16 +67,17 @@ public class AddressResolverTest {
         serverConfigs.add("server0").add("server1").add("server2");
         when(client.execute(any(ModelNode.class))).thenReturn(serverConfigs);
 
-        List<ModelNode> resolved = resolver.resolve(templateFor("host", "master", "server-config", "server0"));
+        List<Response> resolved = resolver.resolve(templateFor("host", "master", "server-config", "server0").resolve());
         assertEquals(1, resolved.size());
-        assertEquals(new ModelNode().add("host", "master").add("server-config", "server0"), resolved.get(0));
+        assertEquals(new ModelNode().add("host", "master").add("server-config", "server0"), resolved.get(0).address);
     }
 
     @Test
-    public void resolveEmptyAddress() throws IOException {
-        List<ModelNode> resolved = resolver.resolve(new AddressTemplate(new ModelNode().setEmptyList()));
+    public void resolveEmptyAddress() {
+        ModelNode emptyAddress = new ModelNode().setEmptyList();
+        List<Response> resolved = resolver.resolve(new AddressTemplate(emptyAddress));
         assertEquals(1, resolved.size());
-        assertTrue(resolved.get(0).asPropertyList().isEmpty());
+        assertSame(emptyAddress, resolved.get(0).address);
     }
 
 
