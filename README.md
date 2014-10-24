@@ -14,6 +14,6 @@ The address template is a resource address with one or several wildcards like `h
 
 # Examples
 
-More examples can be found in this integration test: [ClientIT](src/main/test/org/wildfly/mapreduce/ClientIT.java)
+More examples can be found in this integration test: [ClientIT](src/main/test/java/org/wildfly/mapreduce/ClientIT.java)
 
 # Prototype
