@@ -4,17 +4,67 @@ For management clients like the console it is tedious and inperformant to read r
 
 Today this requires to setup multiple composite operations **on the client side** which need to be executed in an specific order. In an asynchronous environment like the Admin Console things are even more complicated and error prone.
 
-This proposal suggests a new operation which collects all relevant information **on the server side** and returns only the relevant data in one go to the client. This operation consists of three properties
+This proposal suggests a new operation which collects all relevant information **on the server side** and returns only the relevant data in one go to the client. This operation consists of three parts:
 
 - address template
 - optional filter
 - optional list of reducing attributes
 
-The address template is a resource address with one or several wildcards like `host=master/server-config=*`. The address template is resolved to a list of full qualified addresses and for each resolved address a `read-resource(include-runtime=true)`} operation is executed. If a filter is specified, the results are matched against the filter value. Finally the results are reduced according the list of reducing attributes.
+The address template is a resource address with one or several wildcards like `host=master/server-config=*`. The address template is resolved to a list of full qualified addresses. For each resolved address a `read-resource(include-runtime=true)` operation is executed. If a filter is specified, the results are matched against the filter value. Finally the results are reduced according to the list of reducing attributes.
 
 ## Result Format
 
-[Pending]
+The response to a map / reduce operation contains a block for each resolved address. Each block in turn has three elements:
+
+- `address`: The full qualified resolved address
+- `outcome`: Contains `success` if everything was ok, `failure` otherwise
+- `result`: The actual payload
+
+The operation `/host=*/server-config=*:map-reduce` will result in the following response:
+
+```json
+
+    "outcome" => "success",
+    "result" => [
+        {
+            "address" => [
+                ("host" => "master"),
+                ("server-config" => "server-one")
+            ],
+            "outcome" => "success",
+            "result" => {
+                "auto-start" => true,
+                ...
+                "system-property" => undefined
+            }
+        },
+        {
+            "address" => [
+                ("host" => "master"),
+                ("server-config" => "server-three")
+            ],
+            "outcome" => "success",
+            "result" => {
+                "auto-start" => false,
+                ...
+                "system-property" => undefined
+            }
+        },
+        {
+            "address" => [
+                ("host" => "master"),
+                ("server-config" => "server-two")
+            ],
+            "outcome" => "success",
+            "result" => {
+                "auto-start" => true,
+                ...
+                "system-property" => undefined
+            }
+        }
+    ]
+}
+```
 
 ## Error Handling
 
