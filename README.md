@@ -14,16 +14,17 @@ The address template is a resource address with one or several wildcards like `h
 
 ## Result Format
 
-The response to a map / reduce operation contains a block for each resolved address. Each block in turn has three elements:
+The response to a map / reduce operation is a list of nested model nodes for each resolved address. Each model node in turn has three elements:
 
 - `address`: The full qualified resolved address
-- `outcome`: Contains `success` if everything was ok, `failure` otherwise
-- `result`: The actual payload
+- `outcome`: `success` or `failed`
+- `result`: The actual payload or
+- `failure-description`: nn case of an error
 
 The operation `/host=*/server-config=*:map-reduce` will result in the following response:
 
-```json
-
+```
+{
     "outcome" => "success",
     "result" => [
         {
