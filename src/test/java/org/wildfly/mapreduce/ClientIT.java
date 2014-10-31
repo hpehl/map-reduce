@@ -54,6 +54,9 @@ public class ClientIT {
 
     // ------------------------------------------------------ some typical use cases
 
+    /**
+     * Tests whether multiple wildcards are resolved.
+     */
     @Test
     public void allServerConfigs() {
         ModelNode op = mapReduceOp("host", "*", "server-config", "*");
@@ -63,6 +66,9 @@ public class ClientIT {
         assertEquals(3, payload(response).size());
     }
 
+    /**
+     * Tests whether a single wildcard is resolved.
+     */
     @Test
     public void masterServerConfigs() {
         ModelNode op = mapReduceOp("host", "master", "server-config", "*");
@@ -72,13 +78,15 @@ public class ClientIT {
         assertEquals(3, payload(response).size());
     }
 
+    /**
+     * Tests a single filter statement.
+     */
     @Test
     public void serverConfigsInMainGroup() {
         ModelNode op = mapReduceOp("host", "*", "server-config", "*");
 
         ModelNode filter = new ModelNode();
-        filter.get(NAME).set("group");
-        filter.get(VALUE).set("main-server-group");
+        filter.add("group", "main-server-group");
         op.get(FILTER).set(filter);
 
         ModelNode response = mapReduceHandler.execute(op);
@@ -86,18 +94,20 @@ public class ClientIT {
         assertEquals(2, payload(response).size());
     }
 
+    /**
+     * Tests a single filter and a reduce attributes.
+     */
     @Test
     public void reducedAutoStartServerConfigs() {
         ModelNode op = mapReduceOp("host", "*", "server-config", "*");
 
         ModelNode filter = new ModelNode();
-        filter.get(NAME).set("auto-start");
-        filter.get(VALUE).set(false);
+        filter.add("auto-start", false);
         op.get(FILTER).set(filter);
 
         ModelNode attributes = new ModelNode();
         attributes.add("name").add("group");
-        op.get(ATTRIBUTES).set(attributes);
+        op.get(REDUCE).set(attributes);
 
         ModelNode response = mapReduceHandler.execute(op);
         assertSuccessful(response);
@@ -113,25 +123,30 @@ public class ClientIT {
         assertFalse(result.get("auto-start").isDefined());
     }
 
+    /**
+     * Tests a single filter and multiple wildcards.
+     */
     @Test
     public void stateOfRunningServersInMainGroup() {
         ModelNode op = mapReduceOp("host", "*", "server", "*");
 
         ModelNode filter = new ModelNode();
-        filter.get(NAME).set("server-group");
-        filter.get(VALUE).set("main-server-group");
+        filter.add("server-group", "main-server-group");
         op.get(FILTER).set(filter);
 
         ModelNode attributes = new ModelNode();
         attributes.add("server-state");
-        op.get(ATTRIBUTES).set(attributes);
+        op.get(REDUCE).set(attributes);
 
         ModelNode response = mapReduceHandler.execute(op);
         assertSuccessful(response);
     }
 
+    /**
+     * Tests a map / reduce operation which results in both successful and failed outcomes.
+     */
     @Test
-    public void profilesWithJacorb() {
+    public void mixedProfilesResponse() {
         ModelNode op = mapReduceOp("profile", "*", "subsystem", "jacorb");
 
         ModelNode response = mapReduceHandler.execute(op);
@@ -152,11 +167,55 @@ public class ClientIT {
         assertEquals(2, failed); // default, ha
     }
 
+    /**
+     * Tests multiple wildcards, multiple filters and a reduce attribute.
+     */
+    @Test
+    public void enabledDataSources() {
+        ModelNode op = mapReduceOp("profile", "*", "subsystem", "datasources", "data-source", "*");
+
+        ModelNode filter = new ModelNode();
+        filter.add("driver-name", "h2");
+        filter.add("enabled", true);
+        op.get(FILTER).set(filter);
+
+        ModelNode attributes = new ModelNode();
+        attributes.add("connection-url").add("driver-name");
+        op.get(REDUCE).set(attributes);
+
+        ModelNode response = mapReduceHandler.execute(op);
+        assertSuccessful(response);
+        List<ModelNode> payload = payload(response);
+        assertEquals(4, payload.size());
+    }
+
+    /**
+     * Tests multiple filter using disjunction
+     */
+    @Test
+    public void mainOrOtherServerGroup() {
+        ModelNode op = mapReduceOp("host", "*", "server", "*");
+
+        ModelNode filter = new ModelNode();
+        filter.add("server-group", "main-server-group");
+        filter.add("server-group", "other-server-group");
+        op.get(FILTER).set(filter);
+        op.get(FILTER_CONJUNCT).set(false);
+
+        ModelNode response = mapReduceHandler.execute(op);
+        assertSuccessful(response);
+        assertEquals(3, payload(response).size());
+    }
+
 
     // ------------------------------------------------------ error / edge cases
 
+    /**
+     * Tests a map / reduce op without any wildcards. Must return a {@code read-resource(include-runtime=true)} result
+     * nested inside the map / reduce structure.
+     */
     @Test
-    public void noWildcard() {
+    public void noWildcards() {
         ModelNode op = mapReduceOp("host", "master");
 
         // expect a wrapped single read-resource response
@@ -168,10 +227,14 @@ public class ClientIT {
         assertEquals(new ModelNode().add("host", "master"), payload.get(0).get(ADDRESS));
     }
 
+    /**
+     * Tests an empty address. Must return a {@code read-resource(include-runtime=true)} result nested inside the
+     * map / reduce structure.
+     */
     @Test
     public void emptyAddress() {
         ModelNode op = new ModelNode();
-        op.get(OP).set(MAP_REDUCE);
+        op.get(OP).set(MAP_REDUCE_OP);
         op.get(ADDRESS).setEmptyList();
 
         // expect the wrapped root resource
@@ -186,19 +249,73 @@ public class ClientIT {
         assertEquals("DOMAIN", rootResource.get(RESULT).get("launch-type").asString());
     }
 
+    /**
+     * Tests an invalid address template.
+     */
     @Test
     public void invalidAddress() {
+        ModelNode op = mapReduceOp("*", "master");
 
+        ModelNode response = mapReduceHandler.execute(op);
+        assertEquals(FAILED, response.get(OUTCOME).asString());
     }
 
+    /**
+     * Tests a filter which results in no results.
+     */
+    @Test
+    public void filterWithEmptyResult() {
+        ModelNode op = mapReduceOp("host", "master", "server-config", "*");
+
+        ModelNode filter = new ModelNode();
+        filter.add("name", "bar");
+        op.get(FILTER).set(filter);
+
+        ModelNode response = mapReduceHandler.execute(op);
+        assertSuccessful(response);
+        assertTrue(payload(response).isEmpty());
+    }
+
+    /**
+     * Tests an invalid filter.
+     */
     @Test
     public void invalidFilter() {
+        ModelNode op = mapReduceOp("host", "master", "server-config", "*");
 
+        ModelNode filter = new ModelNode();
+        filter.add("foo", "bar");
+        op.get(FILTER).set(filter);
+
+        ModelNode response = mapReduceHandler.execute(op);
+        assertEquals(FAILED, response.get(OUTCOME).asString());
+
+        List<ModelNode> payload = payload(response);
+        assertEquals(3, payload.size());
+        for (ModelNode modelNode : payload) {
+            assertEquals(FAILED, modelNode.get(OUTCOME).asString());
+        }
     }
 
+    /**
+     * Tests an invalid reduce attribute.
+     */
     @Test
-    public void invalidReducingAttributes() {
+    public void invalidReduce() {
+        ModelNode op = mapReduceOp("host", "master", "server-config", "*");
 
+        ModelNode attributes = new ModelNode();
+        attributes.add("foo");
+        op.get(REDUCE).set(attributes);
+
+        ModelNode response = mapReduceHandler.execute(op);
+        assertEquals(FAILED, response.get(OUTCOME).asString());
+
+        List<ModelNode> payload = payload(response);
+        assertEquals(3, payload.size());
+        for (ModelNode modelNode : payload) {
+            assertEquals(FAILED, modelNode.get(OUTCOME).asString());
+        }
     }
 
 
@@ -206,7 +323,7 @@ public class ClientIT {
 
     private ModelNode mapReduceOp(String... address) {
         ModelNode op = new ModelNode();
-        op.get(OP).set(MAP_REDUCE);
+        op.get(OP).set(MAP_REDUCE_OP);
         for (int i = 0; i < address.length; i += 2) {
             op.get(ADDRESS).add(address[i], address[i + 1]);
         }
