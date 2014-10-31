@@ -180,13 +180,19 @@ public class ClientIT {
         op.get(FILTER).set(filter);
 
         ModelNode attributes = new ModelNode();
-        attributes.add("connection-url").add("driver-name");
+        attributes.add("connection-url").add("driver-name").add("enabled");
         op.get(REDUCE).set(attributes);
 
         ModelNode response = mapReduceHandler.execute(op);
         assertSuccessful(response);
         List<ModelNode> payload = payload(response);
         assertEquals(4, payload.size());
+
+        for (ModelNode modelNode : payload) {
+            ModelNode result = modelNode.get(RESULT);
+            assertEquals("h2", result.get("driver-name").asString());
+            assertTrue(result.get("enabled").asBoolean());
+        }
     }
 
     /**
@@ -204,7 +210,8 @@ public class ClientIT {
 
         ModelNode response = mapReduceHandler.execute(op);
         assertSuccessful(response);
-        assertEquals(3, payload(response).size());
+        List<ModelNode> payload = payload(response);
+        assertEquals(3, payload.size());
     }
 
 
