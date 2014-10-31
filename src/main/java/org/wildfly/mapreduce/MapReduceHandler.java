@@ -90,7 +90,7 @@ public class MapReduceHandler {
             ModelNode attributes = mapReduceOp.get(REDUCE);
 
             // resolve addresses
-            AddressTemplate addressTemplate = new AddressTemplate(mapReduceOp.get(ADDRESS));
+            AddressTemplate addressTemplate = new AddressTemplate(mapReduceOp.get(ADDRESS_TEMPLATE));
             List<Response> responses = new AddressResolver(client).resolve(addressTemplate);
 
             for (Iterator<Response> iterator = responses.iterator(); iterator.hasNext(); ) {
@@ -152,10 +152,10 @@ public class MapReduceHandler {
 
     private void validate(final ModelNode operation) {
         // address
-        if (!operation.get(ADDRESS).isDefined()) {
+        if (!operation.get(ADDRESS_TEMPLATE).isDefined()) {
             throw new IllegalArgumentException("No address given");
         }
-        ModelNode address = operation.get(ADDRESS);
+        ModelNode address = operation.get(ADDRESS_TEMPLATE);
         if (address.getType() != ModelType.LIST) {
             throw new IllegalArgumentException(
                     "Address must be of type " + ModelType.LIST + ", but was " + address.getType());

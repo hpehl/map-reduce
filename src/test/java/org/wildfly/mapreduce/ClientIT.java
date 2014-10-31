@@ -236,7 +236,7 @@ public class ClientIT {
 
         List<ModelNode> payload = payload(response);
         assertEquals(1, payload.size());
-        assertEquals(new ModelNode().add("host", "master"), payload.get(0).get(ADDRESS));
+        assertEquals(new ModelNode().add("host", "master"), payload.get(0).get(ADDRESS_TEMPLATE));
     }
 
     /**
@@ -247,7 +247,7 @@ public class ClientIT {
     public void emptyAddress() {
         ModelNode op = new ModelNode();
         op.get(OP).set(MAP_REDUCE_OP);
-        op.get(ADDRESS).setEmptyList();
+        op.get(ADDRESS_TEMPLATE).setEmptyList();
 
         // expect the wrapped root resource
         ModelNode response = mapReduceHandler.execute(op);
@@ -257,7 +257,7 @@ public class ClientIT {
         assertEquals(1, payload.size());
 
         ModelNode rootResource = payload.get(0);
-        assertTrue(rootResource.get(ADDRESS).asList().isEmpty());
+        assertTrue(rootResource.get(ADDRESS_TEMPLATE).asList().isEmpty());
         assertEquals("DOMAIN", rootResource.get(RESULT).get("launch-type").asString());
     }
 
@@ -337,7 +337,7 @@ public class ClientIT {
         ModelNode op = new ModelNode();
         op.get(OP).set(MAP_REDUCE_OP);
         for (int i = 0; i < address.length; i += 2) {
-            op.get(ADDRESS).add(address[i], address[i + 1]);
+            op.get(ADDRESS_TEMPLATE).add(address[i], address[i + 1]);
         }
         return op;
     }
