@@ -50,7 +50,7 @@ address.add("core-service", "management")
        .add("include", "*");
 
 ModelNode filter = new ModelNode();
-filter.add("type", "USER");
+filter.add("type", "USER"); // no groups please
 
 ModelNode attributes = new ModelNode();
 attributes.add("name");
@@ -72,7 +72,7 @@ The response of a map / reduce operation is a list of nested model nodes for eac
 1. `outcome`: `success` or `failed`
 1. `result` or `failure-description`: The actual payload or an error description
 
-Here's an example of the map / reduce operation for the template `/host=*/server-config=*`:
+Here's an example response for `/host=*/server-config=*`:
 
 ```
 {
@@ -120,9 +120,15 @@ Here's an example of the map / reduce operation for the template `/host=*/server
 
 ## Error Handling
 
-If the address template can be resolved to a list of resource addresses, the result will contain a block for each resolved address. However each block can result in an error. That means that the error reporting happens at the level of the nested result blocks. 
+If the address template can be resolved to a list of resource addresses, the result will contain a block for each resolved address. However each block can result in an error. In other words the errors are reported at the level of the nested result blocks. 
 
-The overall result will be successful if one of the nested blocks is successful. Only if all nested blocks report an error the outer outcome will be marked as `failed`.   
+The overall result will be successful if one of the nested blocks is successful. Only if all nested blocks report an error, the outer outcome will also be marked as `failed`.
+
+Errors can occur due to different conditions:
+
+- The `read-resource(include-runtime=true)` returned an error
+- The filter attribute(s) aren't defined in the resolved resource
+- The reduce attributes aren't defined in the resolved resource
 
 The following example shows the result of the map / reduce operation for `/profile=*/subsystem=jacorb`. As you can see the response contains both successful and failed outcomes:
 
@@ -182,7 +188,7 @@ The following example shows the result of the map / reduce operation for `/profi
 
 ## Examples
 
-The following code shows a typical example which reads the state of all running servers across all hosts which are part of server group "main-server-group":
+The following code shows a typical use case for a map / reduce operation which reads the state of all running servers across all hosts which are part of server group "main-server-group":
 
 ```java
 ModelNode address = new ModelNode();
@@ -205,15 +211,15 @@ op.get(REDUCE).set(attributes);
 ModelNode response = modelControllerClient.execute(op);
 ```
 
-More examples can be found in this integration test: [ClientIT](src/test/java/org/wildfly/mapreduce/ClientIT.java)
+More examples can be found in the [ClientIT](src/test/java/org/wildfly/mapreduce/ClientIT.java) integration test.
 
 ## Prototype
 
-This repository implements as a prototype for the proposed map / reduce operation. The [ClientIT](src/test/java/org/wildfly/mapreduce/ClientIT.java) integration tests contains some typical use cases and acts as a playground for the new operation. You can execute the integration test using maven:
+This repository implements a prototype for the proposed map / reduce operation. The [ClientIT](src/test/java/org/wildfly/mapreduce/ClientIT.java) integration tests contains some typical use cases and acts as a playground for the new operations. You can execute the integration test using maven:
 
     maven -Dintegration verify
 
 By default the integration test expects a running domain with default configuration at localhost:9990. You can use the system properties `management.host` and `management.port` to change the defaults:
 
-    maven -Dintegration -Dmanagement.port=somewhere -Dmanagement.port=12345 verify
+    maven -Dintegration -Dmanagement.host=acme.com -Dmanagement.port=12345 verify
 
