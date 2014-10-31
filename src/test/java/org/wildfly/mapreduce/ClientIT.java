@@ -35,7 +35,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 /**
- * Integration test for typical use cases and some edge cases. Requires domain mode with default setup!
+ * Integration test for typical use cases and some edge cases. Requires a running domain mode with default setup!
  */
 public class ClientIT {
 
@@ -79,7 +79,7 @@ public class ClientIT {
     }
 
     /**
-     * Tests a single filter statement.
+     * Tests a single filter attribute.
      */
     @Test
     public void serverConfigsInMainGroup() {
@@ -95,7 +95,7 @@ public class ClientIT {
     }
 
     /**
-     * Tests a single filter and a reduce attributes.
+     * Tests a single filter and multiple reduce attributes.
      */
     @Test
     public void reducedAutoStartServerConfigs() {
@@ -168,7 +168,7 @@ public class ClientIT {
     }
 
     /**
-     * Tests multiple wildcards, multiple filters and a reduce attribute.
+     * Tests multiple wildcards, filters and reduce attributes.
      */
     @Test
     public void enabledDataSources() {
@@ -196,15 +196,15 @@ public class ClientIT {
     }
 
     /**
-     * Tests multiple filter using disjunction
+     * Tests multiple filters using disjunction.
      */
     @Test
     public void mainOrOtherServerGroup() {
-        ModelNode op = mapReduceOp("host", "*", "server", "*");
+        ModelNode op = mapReduceOp("host", "*", "server-config", "*");
 
         ModelNode filter = new ModelNode();
-        filter.add("server-group", "main-server-group");
-        filter.add("server-group", "other-server-group");
+        filter.add("group", "main-server-group");
+        filter.add("group", "other-server-group");
         op.get(FILTER).set(filter);
         op.get(FILTER_CONJUNCT).set(false);
 
@@ -212,6 +212,11 @@ public class ClientIT {
         assertSuccessful(response);
         List<ModelNode> payload = payload(response);
         assertEquals(3, payload.size());
+
+        for (ModelNode modelNode : payload) {
+            String group = modelNode.get(RESULT).get("group").asString();
+            assertTrue("main-server-group".equals(group) || "other-server-group".equals(group));
+        }
     }
 
 
