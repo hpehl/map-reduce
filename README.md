@@ -2,9 +2,9 @@
 
 For management clients like the console it is tedious and inperformant to read resources / attributes in big domains (e.g. return the state of all running servers across all hosts which are part of server group "foo")
 
-Today this requires to setup multiple composite operations **on the client ** which need to be executed in a specific order. In an asynchronous environment like the Admin Console things are even more complicated and error prone.
+Today this requires to setup multiple composite operations **on the client** which need to be executed in a specific order. In an asynchronous environment like the Admin Console things are even more complicated and error prone.
 
-This proposal suggests a new operation for the top level resource which collects all relevant information **on the server ** and returns only the relevant data in one go to the client. This operation consists of three parts:
+This proposal suggests a new operation for the top level resource which collects all relevant information **on the server** and returns only the relevant data in one go to the client. This operation consists of three parts:
 
 1. address template
 1. optional filter
