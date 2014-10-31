@@ -72,12 +72,11 @@ public class MapReduceHandler {
     }
 
     /**
-     * Execute the specified map / reduce operation. The method follow the 'fail-fast' principle. That is the first
-     * error will result in an error model node to be returned.
+     * Execute the specified map / reduce operation.
      *
      * @param mapReduceOp a model node describing a valid map / reduce operation.
      *
-     * @return A list model node which contains all resolved
+     * @return a model node containing a list of results reflecting the resolved addresses.
      *
      * @throws java.lang.IllegalArgumentException      for an invalid map / reduce operation
      * @throws java.lang.UnsupportedOperationException for an invalid map / reduce operation
