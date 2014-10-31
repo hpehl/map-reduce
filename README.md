@@ -10,11 +10,13 @@ This proposal suggests a new operation for the top level resource which collects
 1. optional filter
 1. optional list of reducing attributes
 
-The address template is a resource address with one or multiple wildcards like `host=master/server-config=*`. The address template is resolved to a list of fully qualified resource addresses. For each resolved address a `read-resource(include-runtime=true)` operation is executed. If a filter is specified, the results are matched against the filter value(s). Finally the results are reduced according to the list of reducing attributes.
+## Address Template
+
+The address template is a resource address with one or multiple wildcards like `host=master/server-config=*`. The address template is resolved to a list of fully qualified resource addresses. For each resolved address a `read-resource(include-runtime=true)` operation is executed.
 
 ## Filter
 
-The result of a map / reduce operation can be filtered against a list of name / value pairs. Each filter is compared using `equals()`. If you specify multiple filters, they're evaluated using conjunction by default:
+If a filter is specified, the results of a map / reduce operation are matched against the filter value(s). Each filter value is compared using `equals()`. If you specify multiple filters, they're evaluated using conjunction by default:
 
 ```java
 ModelNode address = new ModelNode();
@@ -30,7 +32,7 @@ ModelNode op = new ModelNode();
 op.get(OP).set(MAP_REDUCE);
 op.get(ADDRESS_TEMPLATE).set(address);
 op.get(FILTER).set(filter);
-// To return datasources where (driver-name == h2 or enabled == true) use
+// To return datasources where (driver-name == h2 || enabled == true) use
 // op.get(FILTER_CONJUNCT).set(false);
 
 ModelNode response = modelControllerClient.execute(op);
@@ -38,7 +40,7 @@ ModelNode response = modelControllerClient.execute(op);
 
 ## Reduce
 
-If you want to reduce the payload to just contain certain attributes, you can specify a list of reduce attributes. The next examples returns just the names of all known users:
+If you want to reduce the payload to just contain certain attributes, you can specify a list of reduce attributes. The following code returns just the names of all known users:
 
 ```java
 ModelNode address = new ModelNode();
