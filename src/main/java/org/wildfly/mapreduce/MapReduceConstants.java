@@ -25,11 +25,12 @@ package org.wildfly.mapreduce;
 public interface MapReduceConstants {
 
     String ADDRESS = "address";
-    String ATTRIBUTES = "attributes";
+    String ADDRESS_TEMPLATE = "address-template";
     String FAILED = "failed";
     String FILTER = "filter";
-    String MAP_REDUCE = "map-reduce";
-    String ROLLED_BACK = "rolled-back";
+    String FILTER_CONJUNCT = "conjunct";
+    String MAP_REDUCE_OP = "map-reduce";
+    String REDUCE = "reduce";
     String WILDCARD = "*";
 }
 

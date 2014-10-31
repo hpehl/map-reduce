@@ -59,9 +59,6 @@ public class MapReduceHandler {
     public static final String DEFAULT_HOST = "localhost";
     public static final int DEFAULT_PORT = 9990;
 
-    private static final String WILDFLY_404 = "WFLYCTL0216";
-    private static final String EAP_404 = "JBAS014807";
-
     private final ModelControllerClient client;
 
     public MapReduceHandler() {
@@ -75,12 +72,11 @@ public class MapReduceHandler {
     }
 
     /**
-     * Execute the specified map / reduce operation. The method follow the 'fail-fast' principle. That is the first
-     * error will result in an error model node to be returned.
+     * Execute the specified map / reduce operation.
      *
      * @param mapReduceOp a model node describing a valid map / reduce operation.
      *
-     * @return A list model node which contains all resolved
+     * @return a model node containing a list of results reflecting the resolved addresses.
      *
      * @throws java.lang.IllegalArgumentException      for an invalid map / reduce operation
      * @throws java.lang.UnsupportedOperationException for an invalid map / reduce operation
@@ -90,10 +86,11 @@ public class MapReduceHandler {
         try {
             validate(mapReduceOp);
             ModelNode filter = mapReduceOp.get(FILTER);
-            ModelNode attributes = mapReduceOp.get(ATTRIBUTES);
+            boolean conjunct = !mapReduceOp.get(FILTER_CONJUNCT).isDefined() || mapReduceOp.get(FILTER_CONJUNCT).asBoolean();
+            ModelNode attributes = mapReduceOp.get(REDUCE);
 
             // resolve addresses
-            AddressTemplate addressTemplate = new AddressTemplate(mapReduceOp.get(ADDRESS));
+            AddressTemplate addressTemplate = new AddressTemplate(mapReduceOp.get(ADDRESS_TEMPLATE));
             List<Response> responses = new AddressResolver(client).resolve(addressTemplate);
 
             for (Iterator<Response> iterator = responses.iterator(); iterator.hasNext(); ) {
@@ -109,7 +106,7 @@ public class MapReduceHandler {
                         } else {
                             // filter
                             ModelNode result = node.get(RESULT);
-                            if (filter.isDefined() && !match(response, result, filter)) {
+                            if (filter.isDefined() && !match(response, result, filter, conjunct)) {
                                 if (!response.isFailed()) {
                                     // remove filtered responses
                                     iterator.remove();
@@ -155,10 +152,10 @@ public class MapReduceHandler {
 
     private void validate(final ModelNode operation) {
         // address
-        if (!operation.get(ADDRESS).isDefined()) {
+        if (!operation.get(ADDRESS_TEMPLATE).isDefined()) {
             throw new IllegalArgumentException("No address given");
         }
-        ModelNode address = operation.get(ADDRESS);
+        ModelNode address = operation.get(ADDRESS_TEMPLATE);
         if (address.getType() != ModelType.LIST) {
             throw new IllegalArgumentException(
                     "Address must be of type " + ModelType.LIST + ", but was " + address.getType());
@@ -166,7 +163,7 @@ public class MapReduceHandler {
         for (Property path : address.asPropertyList()) {
             if (WILDCARD.equals(path.getName())) {
                 throw new IllegalArgumentException("Illegal usage of wildcards in " + ModelNodeUtils
-                        .formatAddress(address) + " for segment " + path.toString());
+                        .formatAddress(address) + " for segment " + path.getName() + "=" + path.getValue().asString());
             }
         }
 
@@ -175,28 +172,20 @@ public class MapReduceHandler {
             throw new IllegalArgumentException("No operation given");
         }
         String op = operation.get(OP).asString();
-        if (!MAP_REDUCE.equals(op)) {
+        if (!MAP_REDUCE_OP.equals(op)) {
             throw new UnsupportedOperationException("Unsupported operation " + op);
         }
 
-        // for now only one filter attribute is supported
+        // Even if you filter only one attribute it has to be inside a list
         ModelNode filter = operation.get(FILTER);
         if (filter.isDefined()) {
-            if (filter.getType() != ModelType.OBJECT) {
+            if (filter.getType() != ModelType.LIST) {
                 throw new IllegalArgumentException(
-                        "Filter must be of type " + ModelType.OBJECT + ", but was " + filter.getType());
-            }
-            ModelNode name = filter.get(NAME);
-            if (!name.isDefined()) {
-                throw new IllegalArgumentException("Filter has no name");
-            }
-            ModelNode value = filter.get(VALUE);
-            if (!value.isDefined()) {
-                throw new IllegalArgumentException("Filter has no value");
+                        "Filter must be of type " + ModelType.LIST + ", but was " + filter.getType());
             }
         }
 
-        ModelNode attributes = operation.get(ATTRIBUTES);
+        ModelNode attributes = operation.get(REDUCE);
         if (attributes.isDefined()) {
             if (attributes.getType() != ModelType.LIST) {
                 throw new IllegalArgumentException(
@@ -208,16 +197,39 @@ public class MapReduceHandler {
         }
     }
 
-    private boolean match(final Response response, final ModelNode result, final ModelNode filter) {
-        String name = filter.get(NAME).asString();
-        ModelNode value = result.get(name);
+    private boolean match(final Response response, final ModelNode result, final ModelNode filter,
+            final boolean conjunct) {
+        List<Property> filterProperties = filter.asPropertyList();
+        List<Boolean> matches = new ArrayList<>(filterProperties.size());
 
-        if (value.isDefined()) {
-            // atm only equals() is supported
-            return value.equals(filter.get(VALUE));
+        for (Property property : filterProperties) {
+            String filterName = property.getName();
+            ModelNode filterValue = property.getValue();
+
+            if (result.get(filterName).isDefined()) {
+                matches.add(result.get(filterName).equals(filterValue));
+            } else {
+                response.makeFailed("Filter attribute \"" + filterName + "\" not defined for this resource");
+                return false;
+            }
+        }
+
+        if (conjunct) {
+            // all matches must be true
+            for (boolean match : matches) {
+                if (!match) {
+                    return false;
+                }
+            }
+            return true;
 
         } else {
-            response.makeFailed("Filter attribute \"" + name + "\" not defined for this resource");
+            // at least one match must be true
+            for (Boolean match : matches) {
+                if (match) {
+                    return true;
+                }
+            }
             return false;
         }
     }

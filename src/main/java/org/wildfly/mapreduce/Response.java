@@ -22,7 +22,7 @@
 package org.wildfly.mapreduce;
 
 import static org.jboss.as.controller.client.helpers.ClientConstants.*;
-import static org.wildfly.mapreduce.MapReduceConstants.ADDRESS;
+import static org.wildfly.mapreduce.MapReduceConstants.ADDRESS_TEMPLATE;
 import static org.wildfly.mapreduce.MapReduceConstants.FAILED;
 
 import org.jboss.dmr.ModelNode;
@@ -74,7 +74,7 @@ final class Response {
 
     ModelNode asModelNode() {
         ModelNode node = new ModelNode();
-        node.get(ADDRESS).set(address);
+        node.get(ADDRESS_TEMPLATE).set(address);
         node.get(OUTCOME).set(outcome);
         if (isFailed()) {
             node.get(FAILURE_DESCRIPTION).set(failure);
